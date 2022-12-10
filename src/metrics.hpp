@@ -1,3 +1,6 @@
+#ifndef MY_METRICS
+#define MY_METRICS
+
 #include <opencv2/opencv.hpp>
 #include <opencv2/highgui.hpp>
 #include <iostream>
@@ -172,3 +175,5 @@ namespace my_metrics
 		std::cout << "PSNR : " << psnr_val << std::endl;
 	}
 }
+
+#endif
