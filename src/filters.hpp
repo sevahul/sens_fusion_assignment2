@@ -281,12 +281,15 @@ namespace my_filters
         I_out = cv::imread(I_path.string(), 0);
         if (I_out.data == nullptr)
             std::cerr << "Failed to load image intensity image for " << datasetName << std::endl;
+        cv::resize(I_out, I_out, I_out.size()/2, 0, 0, CV_INTER_LINEAR);
         D_out_gt = cv::imread(D_gt_path.string(), 0);
         if (D_out_gt.data == nullptr)
             std::cerr << "Failed to load groundtruth disparity image for " << datasetName << std::endl;
+        cv::resize(D_out_gt, D_out_gt, D_out_gt.size()/2, 0, 0, CV_INTER_LINEAR);
         D_out = cv::imread(D_path.string(), 0);
         if (D_out.data == nullptr)
             std::cerr << "Failed to load image disparity image for " << datasetName << std::endl;
+        cv::resize(D_out, D_out, D_out.size()/2, 0, 0, CV_INTER_LINEAR);
 
         std::ifstream MyReadFile(dmin_path.string());
         std::string dmin_string;

@@ -15,28 +15,65 @@ namespace po = boost::program_options;
 namespace fs = boost::filesystem;
 namespace ch = std::chrono;
 
+
+// TODO
+// - param to hide pictures
+// - param to hide gui
+// - param for meaningful names
+
 const std::string version = "1.0";
 
-int gaussWs = 10, gaussWsPrev = gaussWs;
-double gaussSigmaFactor = 1, gaussSigmaFactorPrev = gaussSigmaFactor;
-double sigmaRange = 10, sigmaRangePrev = sigmaRange;
-bool changed = true;
+// Declaration of the names of the windows
+std::string nameBilet = "imgBilet";
+std::string nameJB = "imgJB";
+std::string nameJBU = "imgJBU";
+std::string nameIter = "imgIter";
 
-void funcGaussWs(int newValue, void *object)
+int w_size = 10;
+double gaussSigmaFactor = 1;
+int sigmaRange = 10;
+bool changed = true;
+bool changedSlider = false;
+
+cv::Rect button;
+std::string buttonText("Apply");
+cv::Mat canvas;
+void callButton(int event, int x, int y, int flags, void* userdata)
 {
-	gaussWs = newValue;
-	changed = true;
+    if (event == cv::EVENT_LBUTTONDOWN)
+    {
+        if (button.contains(cv::Point(x, y)))
+        {
+            std::cout << "Clicked!" << std::endl;
+            // rectangle(canvas(button), button, 255, 2);
+			changed = true;
+        }
+    }
+    if (event == cv::EVENT_LBUTTONUP)
+    {
+        // rectangle(canvas, button, 200, 2);
+    }
+
+    // imshow(nameJB, canvas);
+    cv::waitKey(1);
+}
+
+void funcWs(int newValue, void *object)
+{
+	w_size = newValue;
+	changedSlider = true;
 };
 
 void funcGaussSigmaFactor(int newValue, void *object)
 {
-	gaussSigmaFactor = ((double)newValue)/10;
-	changed = true;
+	gaussSigmaFactor = ((double)newValue)/10.0;
+	changedSlider = true;
 };
 
 void funcSigmaRange(int newValue, void *object)
 {
 	sigmaRange = newValue;
+	changedSlider = true;
 };
 
 int main(int argc, char **argv)
@@ -44,8 +81,9 @@ int main(int argc, char **argv)
 	fs::path default_config_path("params.cfg");
 	std::string defaultDatasetName = "Art";
 	std::string datasetName;
-	bool show_images = false;
+	bool show_images = true;
 	bool gen_pointclouds = false;
+	bool interact = true;
 
 	std::string config_path;
 	int nProcessors;
@@ -55,8 +93,18 @@ int main(int argc, char **argv)
 	std::string method;
 
 	po::options_description command_line_options("cli options");
-	command_line_options.add_options()("help,h", "Produce help message")("version,V", "Get program version")("jobs,j", po::value<int>(&nProcessors)->default_value(omp_get_max_threads()), "Number of Threads (max by default)")("dataset,d", po::value<std::string>(&datasetName)->default_value(defaultDatasetName), "Dataset Name")("config,c", po::value<std::string>(&config_path)->default_value(default_config_path.string()), "Path to the congiguration file");
-	("method,m", po::value<std::string>(&method)->default_value("all"), "method name: all/Bilet/JB/JBU/Iter");
+	command_line_options.add_options()
+	("help,h", "Produce help message")("version,V", "Get program version")
+	("hide-disp,H", "Hide disparity images (does not affect gui)")
+	("no-gui,n", "Hide gui")
+	("jobs,j", po::value<int>(&nProcessors)->default_value(omp_get_max_threads()), "Number of Threads (max by default)")
+	("dataset,d", po::value<std::string>(&datasetName)->default_value(defaultDatasetName), "Dataset Name")
+	("config,c", po::value<std::string>(&config_path)->default_value(default_config_path.string()), "Path to the congiguration file")
+	("method,m", po::value<std::string>(&method)->default_value("all"), "method name: all/Bilet/JB/JBU/Iter")
+	("gauss-sigma-factor,f", po::value<double>(&gaussSigmaFactor)->default_value(gaussSigmaFactor), "Gauss sigma factor (it would adjust on the window size)")
+	("window-size,w", po::value<int>(&w_size)->default_value(w_size), "Window size")
+	("range-sigma,s", po::value<int>(&sigmaRange)->default_value(sigmaRange), "Sigma for range");
+
 
 	po::positional_options_description p;
 	p.add("dataset", 1);
@@ -69,10 +117,17 @@ int main(int argc, char **argv)
 
 	// po::store(po::command_line_parser(0, 0).options(config_only_options).run(), vm);
 	notify(vm);
+	if (vm.count("no-gui")){
+		interact = false;
+	}
+
+	if (vm.count("hide-disp")){
+		show_images = false;
+	}
 
 	if (vm.count("help"))
 	{
-		std::cout << "Usage: OpenCV_stereo [<left-image> [<right-image> [<output>]]] [<options>]\n";
+		std::cout << "Usage: [Dataset Name] [<options>]\n";
 		po::options_description help_opts;
 		help_opts.add(command_line_options);
 		std::cout << help_opts << "\n";
@@ -136,34 +191,41 @@ int main(int argc, char **argv)
 	cv::Mat output_D_JBU(I.size(), CV_8U);
 	cv::Mat output_D_Iter(I.size(), CV_8U);
 
-	my_filters::BilterelarFiler(D_dp, output_D_bilet, gaussWs, gaussSigmaFactor, sigmaRange);
-	cv::imwrite((output_dir / "disp_Bilet.png").string(), output_D_bilet);
-	if (gen_pointclouds)
-		my_filters::Disparity2PointCloud((output_dir / "pcl_Bilet").string(), output_D_bilet, dmin);
-	if (show_images)
-		cv::imshow("Bilterelar Filer D", output_D_bilet);
+	if ((method == "all") || (method == "Bilet")){
+		my_filters::BilterelarFiler(D_dp, output_D_bilet, w_size, gaussSigmaFactor, sigmaRange);
+		cv::imwrite((output_dir / "disp_Bilet.png").string(), output_D_bilet);
+		if (gen_pointclouds)
+			my_filters::Disparity2PointCloud((output_dir / "pcl_Bilet").string(), output_D_bilet, dmin);
+		if (show_images)
+			cv::imshow("Bilterelar Filer D", output_D_bilet);
+	}
 
-	my_filters::JointBilterelarFiler(D_dp, I, output_D_JB, gaussWs, gaussSigmaFactor, sigmaRange);
-	cv::imwrite((output_dir / "disp_JB.png").string(), output_D_JB);
-	if (gen_pointclouds)
-		my_filters::Disparity2PointCloud((output_dir / "pcl_JB").string(), output_D_JB, dmin);
-	if (show_images)
-		cv::imshow("Joint Bilterelar Filer D", output_D_JB);
+	if ((method == "all") || (method == "JB")){
+		my_filters::JointBilterelarFiler(D_dp, I, output_D_JB, w_size, gaussSigmaFactor, sigmaRange);
+		cv::imwrite((output_dir / "disp_JB.png").string(), output_D_JB);
+		if (gen_pointclouds)
+			my_filters::Disparity2PointCloud((output_dir / "pcl_JB").string(), output_D_JB, dmin);
+		if (show_images)
+			cv::imshow("Joint Bilterelar Filer D", output_D_JB);
+	}
 
-	my_filters::JointBileteralUpsamplingFilter(D_ds, I, output_D_JBU, gaussWs, gaussSigmaFactor, sigmaRange);
-	cv::imwrite((output_dir / "disp_JBU.png").string(), output_D_JBU);
-	if (gen_pointclouds)
-		my_filters::Disparity2PointCloud((output_dir / "pcl_JBU").string(), output_D_JBU, dmin);
-	if (show_images)
-		cv::imshow("JBU D", output_D_JBU);
+	if ((method == "all") || (method == "JBU")){
+		my_filters::JointBileteralUpsamplingFilter(D_ds, I, output_D_JBU, w_size, gaussSigmaFactor, sigmaRange);
+		cv::imwrite((output_dir / "disp_JBU.png").string(), output_D_JBU);
+		if (gen_pointclouds)
+			my_filters::Disparity2PointCloud((output_dir / "pcl_JBU").string(), output_D_JBU, dmin);
+		if (show_images)
+			cv::imshow("JBU D", output_D_JBU);
+	}
 
-	my_filters::IterativeUpsamplingFilter(D_ds, I, output_D_Iter, gaussWs, gaussSigmaFactor, sigmaRange);
-	cv::imwrite((output_dir / "disp_iter.png").string(), output_D_Iter);
-	if (gen_pointclouds)
-		my_filters::Disparity2PointCloud((output_dir / "pcl_iter").string(), output_D_Iter, dmin);
-	if (show_images)
-		cv::imshow("Iterative Updsampling D", output_D_Iter);
-
+	if ((method == "all") || (method == "Iter")){
+		my_filters::IterativeUpsamplingFilter(D_ds, I, output_D_Iter, w_size, gaussSigmaFactor, sigmaRange);
+		cv::imwrite((output_dir / "disp_iter.png").string(), output_D_Iter);
+		if (gen_pointclouds)
+			my_filters::Disparity2PointCloud((output_dir / "pcl_iter").string(), output_D_Iter, dmin);
+		if (show_images)
+			cv::imshow("Iterative Updsampling D", output_D_Iter);
+	}
 	// cv::waitKey();
 
 	// std::cout << "Filts: ";
@@ -184,72 +246,108 @@ int main(int argc, char **argv)
 		cv::waitKey();
 	
 
-	bool val_changed = true;
-	bool interact = true;
+	
 	if (interact)
 	{
-		// Declaration of the names of the windows
-		std::string nameBilet = "imgBilet";
-		std::string nameJB = "imgJB";
-		std::string nameJBU = "imgJBU";
-		std::string nameIter = "imgIter";
-
 		// Creating the windows
-		cv::namedWindow(nameBilet, cv::WINDOW_AUTOSIZE);
-		cv::namedWindow(nameJB, cv::WINDOW_AUTOSIZE);
-		cv::namedWindow(nameJBU, cv::WINDOW_AUTOSIZE);
-		cv::namedWindow(nameIter, cv::WINDOW_AUTOSIZE);
-		cv::createTrackbar("GaussSigmaFactor", nameJB, NULL, 100, funcGaussSigmaFactor);
-		cv::setTrackbarPos("GaussSigmaFactor", nameJB, int(gaussSigmaFactor)*10 );
-		cv::createTrackbar("GaussWs", nameJB, NULL, 100, funcGaussWs);
-		cv::setTrackbarPos("GaussWs", nameJB, gaussWs);
-		// cv::setTrackbarPos("GaussWs", nameJB, NULL, 100, funcGaussWs);
+		button = cv::Rect(0,0,I.cols, 50);
+		canvas = cv::Mat(I.rows + button.height, I.cols, 0);
+		canvas(button) = 200;
+		putText(canvas(button), buttonText, cv::Point(button.width*0.35, button.height*0.7), cv::FONT_HERSHEY_PLAIN, 1, 0);
+
+		std::vector<std::string> windowNames;
+		if ((method == "all") || (method == "Bilet")) windowNames.push_back(nameBilet);
+		if ((method == "all") || (method == "JB")) windowNames.push_back(nameJB);
+		if ((method == "all") || (method == "JBU")) windowNames.push_back(nameJBU);
+		if ((method == "all") || (method == "Iter")) windowNames.push_back(nameIter);
+
+		for(std::string wName : windowNames)
+  			cv::namedWindow(wName, cv::WINDOW_AUTOSIZE);
+		for(std::string wName : windowNames)
+			cv::setMouseCallback(wName, callButton);
+		for(std::string wName : windowNames){
+			cv::createTrackbar("GaussSigmaFactor*10", wName, NULL, 100, funcGaussSigmaFactor);
+			cv::setTrackbarPos("GaussSigmaFactor*10", wName, int(gaussSigmaFactor*10) );
+			cv::createTrackbar("WindowSize", wName, NULL, 100, funcWs);
+			cv::setTrackbarPos("WindowSize", wName, w_size);
+			cv::createTrackbar("RangeSigma", wName, NULL, 100, funcSigmaRange);
+			cv::setTrackbarPos("RangeSigma", wName, sigmaRange);
+		}
+		// cv::setTrackbarPos("WindowSize", nameJB, NULL, 100, funcWs);
 		// cv::createTrackbar("SigmaRange", nameJB, NULL, 100, funcSigmaRange);
 
-		bool closedBilet = false;
-		bool closedJB = false;
-		bool closedJBU = false;
-		bool closedIter = false;
+		bool closedBilet = false || !((method == "all") || (method == "Bilet"));
+		bool closedJB = false || !((method == "all") || (method == "JB"));
+		bool closedJBU = false || !((method == "all") || (method == "JBU"));
+		bool closedIter = false || !((method == "all") || (method == "Iter"));
+
 		bool visiable = true;
 		char charCheckForESCKey{0};
 		while (charCheckForESCKey != 27 && visiable)
-		{ // loop until ESC key is pressed or webcam is lost
-			// bool frameSuccess = webCam.read(imgOriginal); // get next frame from input stream
-
-			// if (!frameSuccess || imgOriginal.empty()){ // if the frame wasnot read or read wrongly
-			// 	std::cerr << "error: Frame could not be read." << std::endl;
-			// 	break;
-			// }
-
-			// cv::cvtColor(imgOriginal, imgGrayScale, cv::COLOR_BGR2GRAY); // original video is converted to grayscale into imgGrayScale
-
-			// cv::GaussianBlur(imgGrayScale, imgBlurred, cv::Size(5, 5), 1.8); // blurrs the grayscale video. Check OpenCV docs for explanation of parameters
-			// cv::Canny(imgBlurred, imgCanny, lowTh, highTh); // Canny edge detection. Check OpenCV docs for explanation of parameters
-			// cv::threshold(imgGrayScale, imgThreshold, th, maxVal, cv::THRESH_BINARY);
-			// cv::adaptiveThreshold(imgGrayScale, imgAdaptiveThreshold, maxVal,
-			// 							cv::ADAPTIVE_THRESH_MEAN_C, cv::THRESH_BINARY,
-			// 									blockSize*2 + 3, C);
-			// Declaration of windows for output video results. Check OpenCV docs for explanation of parameters
-
+		{ 
 			// Show output video results windows
 			// If the window is not closed
+			if (changedSlider){
+				for(std::string wName : windowNames) {
+					cv::setTrackbarPos("GaussSigmaFactor*10", wName.c_str(), int(gaussSigmaFactor*10));
+					cv::setTrackbarPos("WindowSize", wName.c_str(), w_size);
+					cv::setTrackbarPos("RangeSigma", wName.c_str(), sigmaRange);
+				}
+			}
+			double first_ssim = my_metrics::ssim(D_dp, D_gt, 5);
+			std::string DP_ssim_str = " DP ssim: " + std::to_string(first_ssim);
 			if (changed) {
+				// std::cout << "Changed" << std::endl;
+
+				std::ostringstream ss;
+				ss << std::fixed << std::setprecision(2) << "Window Size: " <<  w_size <<
+									"; Gauss Sigma Factor: " << gaussSigmaFactor << 
+									"; Range Sigma: " << sigmaRange;
+				std::string text = ss.str();
+
+				
 				if (!closedBilet)
 				{
-					my_filters::JointBilterelarFiler(D_dp, I, output_D_JB, gaussWs, gaussSigmaFactor, sigmaRange);
-					cv::imshow(nameBilet, output_D_bilet);
+					std::cout << "applying"  << std::endl;
+					my_filters::BilterelarFiler(D_dp, output_D_bilet, w_size, gaussSigmaFactor, sigmaRange);
+					double ssim = my_metrics::ssim(output_D_bilet, D_gt, 5);
+					cv::putText(output_D_bilet, text, cv::Point(10,30), 1, 1, 255, 1);
+					cv::putText(output_D_bilet, "Cur ssim: " + std::to_string(ssim), cv::Point(10,50), 1, 1, 255, 1);
+					cv::putText(output_D_bilet, DP_ssim_str, cv::Point(10,70), 1, 1, 255, 1);
+					output_D_bilet.copyTo(canvas(cv::Rect(0, button.height, I.cols, I.rows)));
+					cv::imshow(nameBilet, canvas);
 				}
 				if (!closedJB)
 				{
-					cv::imshow(nameJB, output_D_JB);
+					std::cout << "applying"  << std::endl;
+					my_filters::JointBilterelarFiler(D_dp, I, output_D_JB, w_size, gaussSigmaFactor, sigmaRange);
+					double ssim = my_metrics::ssim(output_D_JB, D_gt, 5);
+					cv::putText(output_D_JB, text, cv::Point(10,30), 1, 1, 255, 1);
+					cv::putText(output_D_JB, "Cur ssim: " + std::to_string(ssim), cv::Point(10,50), 1, 1, 255, 1);
+					cv::putText(output_D_JB, DP_ssim_str, cv::Point(10,70), 1, 1, 255, 1);
+					output_D_JB.copyTo(canvas(cv::Rect(0, button.height, I.cols, I.rows)));
+					cv::imshow(nameJB, canvas);
 				}
 				if (!closedJBU)
 				{
-					cv::imshow(nameJBU, output_D_JBU);
+					my_filters::JointBileteralUpsamplingFilter(D_ds, I, output_D_JBU, w_size, gaussSigmaFactor, sigmaRange);
+					double ssim = my_metrics::ssim(output_D_JBU, D_gt, 5);
+					cv::putText(output_D_JBU, text, cv::Point(10,30), 1, 1, 255, 1);
+					cv::putText(output_D_JBU, "Cur ssim: " + std::to_string(ssim), cv::Point(10,50), 1, 1, 255, 1);
+					cv::putText(output_D_JBU, DP_ssim_str, cv::Point(10,70), 1, 1, 255, 1);
+					output_D_JBU.copyTo(canvas(cv::Rect(0, button.height, I.cols, I.rows)));
+					cv::imshow(nameJBU, canvas);
 				}
 				if (!closedIter)
 				{
-					cv::imshow(nameIter, output_D_Iter);
+					std::cout << "applying"  << std::endl;
+					my_filters::IterativeUpsamplingFilter(D_ds, I, output_D_Iter, w_size, gaussSigmaFactor, sigmaRange);
+					double ssim = my_metrics::ssim(output_D_Iter, D_gt, 5);
+					cv::putText(output_D_Iter, text, cv::Point(10,30), 1, 1, 255, 1);
+					cv::putText(output_D_Iter, "Cur ssim: " + std::to_string(ssim), cv::Point(10,50), 1, 1, 255, 1);
+					cv::putText(output_D_Iter, DP_ssim_str, cv::Point(10,70), 1, 1, 255, 1);
+					output_D_Iter.copyTo(canvas(cv::Rect(0, button.height, I.cols, I.rows)));
+					cv::imshow(nameIter, canvas);
 				}
 				changed = false;
 			}
