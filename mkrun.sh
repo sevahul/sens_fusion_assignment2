@@ -1,2 +1,2 @@
 ./make.sh
-./build/filters
+./build/filters "$@"

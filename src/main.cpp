@@ -1,4 +1,5 @@
 #include <iostream>
+#include <fstream>
 #include <opencv2/opencv.hpp>
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
@@ -82,7 +83,7 @@ void OurGaussianFiler(const cv::Mat& input, cv::Mat& output, int window_size=5, 
 	GeneralFiler(input, output, mask);
 }
 
-void OurBilterelarFiler(const cv::Mat& input, cv::Mat& output, int window_size=5, double sigmaSpatialFactor=1.0, double sigmaRange=20.0) {
+void BilterelarFiler(const cv::Mat& input, cv::Mat& output, int window_size=5, double sigmaSpatialFactor=1.0, double sigmaRange=20.0) {
 	// e^-r^2(x, y)/2(sigma^2)
 	const auto width = input.cols;
 	const auto height = input.rows;
@@ -143,10 +144,10 @@ void OurBilterelarFiler(const cv::Mat& input, cv::Mat& output, int window_size=5
 	}
 }
 
-void JointBilterelarFiler(const cv::Mat& inputDepth, const cv::Mat& input, cv::Mat& output, int window_size=5, double sigmaSpatialFactor=1.0, double sigmaRange=20.0) {
+void JointBilterelarFiler(const cv::Mat& D, const cv::Mat& I, cv::Mat& output, int window_size=5, double sigmaSpatialFactor=1.0, double sigmaRange=20.0) {
 	// e^-r^2(x, y)/2(sigma^2)
-	const auto width = input.cols;
-	const auto height = input.rows;
+	const auto width = I.cols;
+	const auto height = I.rows;
 	
 	const int hw = window_size/2;
 	const double sigmaSpatial = hw/2.5 * sigmaSpatialFactor;
@@ -185,14 +186,14 @@ void JointBilterelarFiler(const cv::Mat& inputDepth, const cv::Mat& input, cv::M
 	for (int r = window_size / 2; r < height - window_size / 2; ++r) {
 		
 		for (int c = window_size / 2; c < width - window_size / 2; ++c) {
-			int intensity_center = static_cast<int>(input.at<uchar>(r, c));
+			int intensity_center = static_cast<int>(I.at<uchar>(r, c));
 			// box filter
 			int sum = 0;
 			float sumBilateralMask = 0;
 			for (int i = -window_size / 2; i <= window_size / 2; ++i) {
 				for (int j = -window_size / 2; j <= window_size / 2; ++j) {
-					int intensity = static_cast<int>(input.at<uchar>(r + i, c + j ));
-					int intensity_depth = static_cast<int>(inputDepth.at<uchar>(r + i, c + j));
+					int intensity = static_cast<int>(I.at<uchar>(r + i, c + j ));
+					int intensity_depth = static_cast<int>(D.at<uchar>(r + i, c + j));
 					int diff = std::abs(intensity_center - intensity);
 					float weight_range =  range_mask[diff];
 					int weight_spatial = static_cast<int>(mask.at<uchar>(i + window_size/2, j + window_size/2));
@@ -207,51 +208,88 @@ void JointBilterelarFiler(const cv::Mat& inputDepth, const cv::Mat& input, cv::M
 	output = output_copy.clone();
 }
 
-void JointBileteralUpsamplingFilter(const cv::Mat& inputDepth, const cv::Mat& input, cv::Mat& output, int window_size=5, double sigmaSpatialFactor=1.0, double sigmaRange=20.0) {
-	cv::Mat depth_nearest;
-	cv::resize(inputDepth, depth_nearest, input.size(), 0, 0, cv::INTER_NEAREST);
-	JointBilterelarFiler(depth_nearest, input, output,window_size,sigmaSpatialFactor, sigmaRange);
+void JointBileteralUpsamplingFilter(const cv::Mat& D, const cv::Mat& I, cv::Mat& output, int window_size=5, double sigmaSpatialFactor=1.0, double sigmaRange=20.0) {
+	cv::Mat D_upsampled;
+	cv::resize(D, D_upsampled, I.size(), 0, 0, cv::INTER_NEAREST);
+	JointBilterelarFiler(D_upsampled, I, output,window_size,sigmaSpatialFactor, sigmaRange);
 	return;
 }
 
-void IterativeUpsamplingFilter(const cv::Mat& inputDepth, const cv::Mat& input, cv::Mat& output, int window_size=5, double sigmaSpatialFactor=1.0, double sigmaRange=20.0) {
-	// std::cout << inputDepth.size() << std::endl;
-	// std::cout << input.size() << std::endl;
-	int fu = static_cast <int> (std::floor( std::log2(input.rows/inputDepth.rows) + 0.00001));
+void IterativeUpsamplingFilter(const cv::Mat& D, const cv::Mat& I, cv::Mat& output, int window_size=5, double sigmaSpatialFactor=1.0, double sigmaRange=20.0) {
+	int fu = static_cast <int> (std::floor( std::log2(I.rows/D.rows) + 0.00001));
 
-	cv::Mat D_hat =  inputDepth.clone();
+	cv::Mat D_hat =  D.clone();
 	cv::Mat I_hat;
 	for (size_t i = 1; i <= fu-1 ; i++)
 	{
 		cv::resize(D_hat, D_hat, D_hat.size()*2, 0, 0, cv::INTER_LINEAR);
-		cv::resize(input, I_hat, D_hat.size(), 0, 0, cv::INTER_LINEAR);
+		cv::resize(I, I_hat, D_hat.size(), 0, 0, cv::INTER_LINEAR);
 		JointBilterelarFiler(D_hat, I_hat, D_hat, window_size, sigmaSpatialFactor, sigmaRange);
 	}
-	cv::resize(D_hat, D_hat, input.size(), 0, 0, cv::INTER_LINEAR);
-	JointBilterelarFiler(D_hat, input, output, window_size, sigmaSpatialFactor, sigmaRange);
+	cv::resize(D_hat, D_hat, I.size(), 0, 0, cv::INTER_LINEAR);
+	JointBilterelarFiler(D_hat, I, output, window_size, sigmaSpatialFactor, sigmaRange);
 }
 
+void readDataset(const std::string& datasetName, cv::Mat& I_out, cv::Mat& D_out_gt, cv::Mat& D_out, cv::Mat& D_out_downsampled, int& dmin) {
+	fs::path data_path ("data");
+	data_path = data_path/datasetName;
+
+	fs::path I_path = data_path/"intensity.png";
+	fs::path D_path = data_path/"disp_DP.png";
+	fs::path D_gt_path = data_path/"disparity.png";
+	fs::path dmin_path = data_path/"dmin.txt";
+	fs::path output_dir ("output");
+	output_dir /= datasetName;
+
+	I_out = cv::imread(I_path.string(), 0);
+	if (I_out.data == nullptr) std::cerr << "Failed to load image intensity image for " << datasetName << std::endl;
+	D_out_gt = cv::imread(D_gt_path.string(), 0);
+	if (D_out_gt.data == nullptr) std::cerr << "Failed to load groundtruth disparity image for " << datasetName << std::endl;
+	D_out = cv::imread(D_path.string(), 0);
+	if (D_out.data == nullptr) std::cerr << "Failed to load image disparity image for " << datasetName << std::endl;
+
+	std::ifstream MyReadFile(dmin_path.string());
+	std::string dmin_string;
+	std::getline (MyReadFile, dmin_string);
+	dmin = std::stoi(dmin_string);
+	MyReadFile.close();
+
+	cv::resize(D_out, D_out_downsampled, D_out_gt.size()/4, 0, 0, cv::INTER_LINEAR);
+	// fs::create_directory("output");
+	fs::create_directories(output_dir);
+
+}
+
+void Disparity2PointCloud(
+    const std::string& output_file, cv::Mat& disparities,
+    const int& dmin, const double& baseline = 160, const double& focal_length = 3740);
 
 int main(int argc, char** argv) {
-	fs::path default_image_path("data");
-	default_image_path /= "art.png";
 	fs::path default_config_path ("params.cfg");
-
-	std::string image_path;
-	std::string image_orig_path = "data/view0.png";
+	std::string defaultDatasetName = "Art";
+	std::string datasetName;
+	bool show_images = true;
+	bool gen_pointclouds = true;
+	
+	
 	std::string config_path;
 	int nProcessors;
+	const double focal_length = 3740;
+	const double baseline = 160;
+	int dmin;
+	std::string method;
 	
-    	po::options_description command_line_options("cli options");
-    	command_line_options.add_options()
+    po::options_description command_line_options("cli options");
+    command_line_options.add_options()
     	("help,h", "Produce help message")
     	("version,V", "Get program version")
     	("jobs,j", po::value<int>(& nProcessors)->default_value(omp_get_max_threads()), "Number of Threads (max by default)")
-    	("image,i", po::value<std::string>(& image_path)->default_value(default_image_path.string()), "Image path")
+    	("dataset,d", po::value<std::string>(& datasetName)->default_value(defaultDatasetName), "Dataset Name")
     	("config,c", po::value<std::string>(& config_path)->default_value(default_config_path.string()), "Path to the congiguration file");
+    	("method,m", po::value<std::string>(& method)->default_value("all"), "method name: all/Bilet/JB/JBU/Iter");
 
 	po::positional_options_description p;
-    	p.add("image", 1);
+    	p.add("dataset", 1);
 	
 	po::variables_map vm;
     	po::options_description cmd_opts;
@@ -265,117 +303,89 @@ int main(int argc, char** argv) {
 
 	
 	if (vm.count("help")) {
-	std::cout << "Usage: OpenCV_stereo [<left-image> [<right-image> [<output>]]] [<options>]\n";
-	po::options_description help_opts;
-	help_opts.add(command_line_options);
-	std::cout << help_opts << "\n";
-	return 1;
-    	}
+		std::cout << "Usage: OpenCV_stereo [<left-image> [<right-image> [<output>]]] [<options>]\n";
+		po::options_description help_opts;
+		help_opts.add(command_line_options);
+		std::cout << help_opts << "\n";
+		return 1;
+	}
 
-    	if (vm.count("version")) {
+	if (vm.count("version")) {
 		std::cout << "Image filtering " << version << std::endl;
 		return 1;
-    	}
-	std::cout << "Filtering image " << image_path << std::endl;
-	cv::Mat im = cv::imread(image_path, 0);
-	cv::Mat im_orig = cv::imread(image_orig_path, 0);
-	
-	cv::Mat gt_copy;
-	im.copyTo(gt_copy);
-	gt_copy.convertTo(gt_copy, CV_16SC1);
-	std::vector<std::string> filterNames;
-	std::vector<double> SSIMs;
-	std::vector<double> PSRNs; 
+	}
+	std::cout << "Processing dataset " << datasetName << std::endl;
+	fs::path output_dir ("output");
+	output_dir /= datasetName;
 
-	if (im.data == nullptr) {
+	cv::Mat I;
+	cv::Mat D_gt;
+	cv::Mat D_dp;
+	cv::Mat D_ds;
+
+	readDataset(datasetName, I, D_gt, D_dp, D_ds, dmin);
+	
+	cv::imwrite((output_dir/"disp.png").string(), D_gt);
+	cv::imwrite((output_dir/"disp_DP.png").string(), D_dp);
+	
+	
+	// cv::Mat I_noisy;
+	// I.copyTo(I_noisy);
+	// cv::Mat noise(I_noisy.size(), I_noisy.type());
+	// uchar mean = 0;
+	// uchar stddev = 25;
+	// cv::randn(noise, mean, stddev);
+	// I_noisy += noise;
+
+	// I_noisy.convertTo(I_noisy, CV_16SC1);
+	// std::vector<std::string> filterNames;
+	// std::vector<double> SSIMs;
+	// std::vector<double> PSRNs; 
+
+	if (D_gt.data == nullptr) {
 		std::cerr << "Failed to load image" << std::endl;
 	}
 
-	//cv::imshow("im", im);
-	//cv::waitKey();
-	cv::Mat noise(im.size(), im.type());
-	uchar mean = 0;
-	uchar stddev = 25;
-	cv::randn(noise, mean, stddev);
+	if (show_images) cv::imshow("D_gt", D_gt);
+	
 
-	im += noise;
-
-	cv::imshow("im", im);
+	if(show_images) cv::imshow("I", I);
 	// cv::waitKey();
-	//std::cout << "SSIM " << my_metrics::ssim(gt_copy, im, 5) << std::endl;	
+	//std::cout << "SSIM " << my_metrics::ssim(I_noisy, im, 5) << std::endl;	
 	// SSIMs.push_back(my_metrics::ssim(im, im, 5));
 	// PSRNs.push_back(my_metrics::psnr(im, im, 5));
 	// filterNames.push_back("Orig");
-	// SSIMs.push_back(my_metrics::ssim(gt_copy, im, 5));
+	// SSIMs.push_back(my_metrics::ssim(I_noisy, im, 5));
 	// PSRNs.push_back(my_metrics::psnr(gt_copy, im, 5));
 	// filterNames.push_back("Nois");
 	// gaussian
-	cv::Mat output(im.size(), CV_8U);
-	// cv::GaussianBlur(im, output, cv::Size(7, 7), 0, 0);
-	// std::cout << output.type() << std::endl;
-	// return 0; 
-	// cv::imshow("gaussian", output);
-	// cv::waitKey();
-	
-	// SSIMs.push_back(my_metrics::ssim(gt_copy, output, 5));
-	// PSRNs.push_back(my_metrics::psnr(gt_copy, output, 5));
-	// filterNames.push_back("Gaus");
+	cv::Mat output_I(I.size(), CV_8U);
+	cv::Mat output_D(I.size(), CV_8U);
 
-	// // median
-	// cv::medianBlur(im, output, 3);
-	// cv::imshow("median", output);
-	// //cv::waitKey();
-		
-	// SSIMs.push_back(my_metrics::ssim(gt_copy, output, 5));
-	// PSRNs.push_back(my_metrics::psnr(gt_copy, output, 5));
-	// filterNames.push_back("Med");
+	int gauss_ws = 10;
+	double gauss_sigma_factor = 1;
 
-	// // bilateral
-	// double window_size = 11;
-	// cv::bilateralFilter(im, output, window_size, 2 * window_size, window_size / 2);
-	// cv::imshow("bilateral", output);
-		
-	// SSIMs.push_back(my_metrics::ssim(gt_copy, output, 5));
-	// PSRNs.push_back(my_metrics::psnr(gt_copy, output, 5));
-	// filterNames.push_back("Bilet");
+	double sigmaRange = 10.0;
+	BilterelarFiler(D_dp, output_D, gauss_ws, gauss_sigma_factor, sigmaRange);
+	cv::imwrite((output_dir/"disp_Bilet.png").string(), output_D);
+	if (gen_pointclouds) Disparity2PointCloud((output_dir/"pcl_Bilet").string(), output_D, dmin);
 
-	int gauss_ws = 17;
-	double gauss_sigma_factor = 1.0;
-	// OurGaussianFiler(im, output, gauss_ws, gauss_sigma_factor);
-	// cv::imshow("OurGaussianFiler", output);
+	if(show_images) cv::imshow("Bilterelar Filer D", output_D);
 
-	// SSIMs.push_back(my_metrics::ssim(gt_copy, output, 5));
-	// PSRNs.push_back(my_metrics::psnr(gt_copy, output, 5));
-	// filterNames.push_back("OurGaus");
+	JointBilterelarFiler(D_dp, I, output_D, gauss_ws, gauss_sigma_factor, sigmaRange);
+	cv::imwrite((output_dir/"disp_JB.png").string(), output_D);
+	if (gen_pointclouds) Disparity2PointCloud((output_dir/"pcl_JB").string(), output_D, dmin);
+	if(show_images) cv::imshow("Joint Bilterelar Filer D", output_D);
 
-	double sigmaRange = 50.0;
-	// OurBilterelarFiler(im, output, gauss_ws, gauss_sigma_factor, sigmaRange);
-	// cv::imshow("OurBilterelarFiler", output);
-	
-	
-	
-	// SSIMs.push_back(my_metrics::ssim(gt_copy, output, 5));
-	// PSRNs.push_back(my_metrics::psnr(gt_copy, output, 5));
-	// filterNames.push_back("OurBilet");
+	JointBileteralUpsamplingFilter(D_ds, I, output_D, gauss_ws, gauss_sigma_factor, sigmaRange);
+	cv::imwrite((output_dir/"disp_JBU.png").string(), output_D);
+	if (gen_pointclouds) Disparity2PointCloud((output_dir/"pcl_JBU").string(), output_D, dmin);
+	if(show_images) cv::imshow("JBU D", output_D);
 
-	// JointBilterelarFiler(im, im_orig, output, gauss_ws, gauss_sigma_factor, sigmaRange);
-	// cv::imshow("JointBilterelarFiler", output);
-
-	// cv::waitKey();
-
-  	cv::Mat low_res;
-	cv::resize(im, low_res, im.size()/2, cv::INTER_LINEAR);
-	// cv::imshow("ResizedDown", low_res);
-
-	// cv::waitKey();
-	// cv::Mat output_low_res(low_res.size(), CV_8U);
-	// im_orig_low_res;
-
-	JointBileteralUpsamplingFilter(low_res, im_orig, output, gauss_ws, gauss_sigma_factor, sigmaRange);
-	cv::imshow("JBU", output);
-
-	IterativeUpsamplingFilter(low_res, im_orig, output, gauss_ws, gauss_sigma_factor, sigmaRange);
-	cv::imshow("Iterative", output);
+	IterativeUpsamplingFilter(D_ds, I, output_D, gauss_ws, gauss_sigma_factor, sigmaRange);
+	cv::imwrite((output_dir/"disp_iter.png").string(), output_D);
+	if (gen_pointclouds) Disparity2PointCloud((output_dir/"pcl_iter").string(), output_D, dmin);
+	if(show_images) cv::imshow("Iterative Updsampling D", output_D);
 
 	// cv::waitKey();
 	
@@ -395,4 +405,36 @@ int main(int argc, char** argv) {
 
 	cv::waitKey();
 	return 0;
+}
+
+void Disparity2PointCloud(
+    const std::string& output_file, cv::Mat& disparities,
+    const int& dmin, const double& baseline, const double& focal_length)
+{
+	int rows = disparities.rows;
+	int cols = disparities.cols;
+    std::stringstream out3d;
+    out3d << output_file << ".xyz";
+    std::ofstream outfile(out3d.str());
+
+    for (int r = 0; r < rows; ++r) {
+        std::cout << "Reconstructing 3D point cloud from disparities... " << std::ceil(((r) / static_cast<double>(rows + 1)) * 100) << "%\r" << std::flush;
+		// #pragma omp parallel for
+		for (int c = 0; c < cols; ++c) {
+            if (disparities.at<uchar>(r, c) == 0) continue;
+
+            int d = (int)disparities.at<uchar>(r, c) + dmin;
+            int u1 = c - cols/2;
+            int u2 = c + d - cols/2;
+	    	int v1 = r - rows/2;
+
+            const double Z = baseline * focal_length / d;
+            const double X = -0.5 * ( baseline * (u1 + u2) ) / d;
+            const double Y = baseline * v1 / d;
+            outfile << X << " " << Y << " " << Z << std::endl;
+        }
+    }
+
+    std::cout << "Reconstructing 3D point cloud from disparities... Done.\r" << std::flush;
+    std::cout << std::endl;
 }
