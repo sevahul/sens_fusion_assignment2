@@ -1,3 +1,6 @@
+#ifndef MY_FILTERS
+#define MY_FILTERS
+
 #include <opencv2/opencv.hpp>
 #include <opencv2/highgui.hpp>
 #include <iostream>
@@ -168,6 +171,7 @@ namespace my_filters
 
     void JointBilterelarFiler(const cv::Mat &D, const cv::Mat &I, cv::Mat &output, int window_size = 5, double sigmaSpatialFactor = 1.0, double sigmaRange = 20.0)
     {
+        std::cout << "Applying JB with " << sigmaSpatialFactor << std::endl;
         // e^-r^2(x, y)/2(sigma^2)
         const auto width = I.cols;
         const auto height = I.rows;
@@ -331,3 +335,6 @@ namespace my_filters
 }
 
 }
+
+
+#endif

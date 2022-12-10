@@ -17,6 +17,27 @@ namespace ch = std::chrono;
 
 const std::string version = "1.0";
 
+int gaussWs = 10, gaussWsPrev = gaussWs;
+double gaussSigmaFactor = 1, gaussSigmaFactorPrev = gaussSigmaFactor;
+double sigmaRange = 10, sigmaRangePrev = sigmaRange;
+bool changed = true;
+
+void funcGaussWs(int newValue, void *object)
+{
+	gaussWs = newValue;
+	changed = true;
+};
+
+void funcGaussSigmaFactor(int newValue, void *object)
+{
+	gaussSigmaFactor = ((double)newValue)/10;
+	changed = true;
+};
+
+void funcSigmaRange(int newValue, void *object)
+{
+	sigmaRange = newValue;
+};
 
 int main(int argc, char **argv)
 {
@@ -115,32 +136,28 @@ int main(int argc, char **argv)
 	cv::Mat output_D_JBU(I.size(), CV_8U);
 	cv::Mat output_D_Iter(I.size(), CV_8U);
 
-	int gauss_ws = 10;
-	double gauss_sigma_factor = 1;
-
-	double sigmaRange = 10.0;
-	my_filters::BilterelarFiler(D_dp, output_D_bilet, gauss_ws, gauss_sigma_factor, sigmaRange);
+	my_filters::BilterelarFiler(D_dp, output_D_bilet, gaussWs, gaussSigmaFactor, sigmaRange);
 	cv::imwrite((output_dir / "disp_Bilet.png").string(), output_D_bilet);
 	if (gen_pointclouds)
 		my_filters::Disparity2PointCloud((output_dir / "pcl_Bilet").string(), output_D_bilet, dmin);
 	if (show_images)
 		cv::imshow("Bilterelar Filer D", output_D_bilet);
 
-	my_filters::JointBilterelarFiler(D_dp, I, output_D_JB, gauss_ws, gauss_sigma_factor, sigmaRange);
+	my_filters::JointBilterelarFiler(D_dp, I, output_D_JB, gaussWs, gaussSigmaFactor, sigmaRange);
 	cv::imwrite((output_dir / "disp_JB.png").string(), output_D_JB);
 	if (gen_pointclouds)
 		my_filters::Disparity2PointCloud((output_dir / "pcl_JB").string(), output_D_JB, dmin);
 	if (show_images)
 		cv::imshow("Joint Bilterelar Filer D", output_D_JB);
 
-	my_filters::JointBileteralUpsamplingFilter(D_ds, I, output_D_JBU, gauss_ws, gauss_sigma_factor, sigmaRange);
+	my_filters::JointBileteralUpsamplingFilter(D_ds, I, output_D_JBU, gaussWs, gaussSigmaFactor, sigmaRange);
 	cv::imwrite((output_dir / "disp_JBU.png").string(), output_D_JBU);
 	if (gen_pointclouds)
 		my_filters::Disparity2PointCloud((output_dir / "pcl_JBU").string(), output_D_JBU, dmin);
 	if (show_images)
 		cv::imshow("JBU D", output_D_JBU);
 
-	my_filters::IterativeUpsamplingFilter(D_ds, I, output_D_Iter, gauss_ws, gauss_sigma_factor, sigmaRange);
+	my_filters::IterativeUpsamplingFilter(D_ds, I, output_D_Iter, gaussWs, gaussSigmaFactor, sigmaRange);
 	cv::imwrite((output_dir / "disp_iter.png").string(), output_D_Iter);
 	if (gen_pointclouds)
 		my_filters::Disparity2PointCloud((output_dir / "pcl_iter").string(), output_D_Iter, dmin);
@@ -165,7 +182,9 @@ int main(int argc, char **argv)
 
 	if (show_images)
 		cv::waitKey();
+	
 
+	bool val_changed = true;
 	bool interact = true;
 	if (interact)
 	{
@@ -180,6 +199,12 @@ int main(int argc, char **argv)
 		cv::namedWindow(nameJB, cv::WINDOW_AUTOSIZE);
 		cv::namedWindow(nameJBU, cv::WINDOW_AUTOSIZE);
 		cv::namedWindow(nameIter, cv::WINDOW_AUTOSIZE);
+		cv::createTrackbar("GaussSigmaFactor", nameJB, NULL, 100, funcGaussSigmaFactor);
+		cv::setTrackbarPos("GaussSigmaFactor", nameJB, int(gaussSigmaFactor)*10 );
+		cv::createTrackbar("GaussWs", nameJB, NULL, 100, funcGaussWs);
+		cv::setTrackbarPos("GaussWs", nameJB, gaussWs);
+		// cv::setTrackbarPos("GaussWs", nameJB, NULL, 100, funcGaussWs);
+		// cv::createTrackbar("SigmaRange", nameJB, NULL, 100, funcSigmaRange);
 
 		bool closedBilet = false;
 		bool closedJB = false;
@@ -208,21 +233,25 @@ int main(int argc, char **argv)
 
 			// Show output video results windows
 			// If the window is not closed
-			if (!closedBilet)
-			{
-				cv::imshow(nameBilet, output_D_bilet);
-			}
-			if (!closedJB)
-			{
-				cv::imshow(nameJB, output_D_JB);
-			}
-			if (!closedJBU)
-			{
-				cv::imshow(nameJBU, output_D_JBU);
-			}
-			if (!closedIter)
-			{
-				cv::imshow(nameIter, output_D_Iter);
+			if (changed) {
+				if (!closedBilet)
+				{
+					my_filters::JointBilterelarFiler(D_dp, I, output_D_JB, gaussWs, gaussSigmaFactor, sigmaRange);
+					cv::imshow(nameBilet, output_D_bilet);
+				}
+				if (!closedJB)
+				{
+					cv::imshow(nameJB, output_D_JB);
+				}
+				if (!closedJBU)
+				{
+					cv::imshow(nameJBU, output_D_JBU);
+				}
+				if (!closedIter)
+				{
+					cv::imshow(nameIter, output_D_Iter);
+				}
+				changed = false;
 			}
 
 			charCheckForESCKey = cv::waitKey(1); // gets the key pressed
