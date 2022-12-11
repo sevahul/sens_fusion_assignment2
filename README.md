@@ -16,3 +16,6 @@
 ## Visualize pointclouds:
 `./visualize.py [-d<Dataset>] [-m[Algorithm]] [--help/-h]` <br/>
 **Note:** to produce pointclouds, use `-p` flag while running the program
+
+## Report
+Report is in `analaysis.pdf` file

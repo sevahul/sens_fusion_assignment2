@@ -4,72 +4,19 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/highgui.hpp>
 #include <iostream>
-#include <iostream>
 #include <fstream>
 #include <opencv2/opencv.hpp>
-#include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
-#include <boost/program_options/options_description.hpp>
 #include <omp.h>
 #include <cmath>
-
-#include "opencv2/highgui.hpp"
 #include <opencv2/highgui/highgui_c.h>
 #include "metrics.hpp"
-namespace po = boost::program_options;
+
 namespace fs = boost::filesystem;
 namespace ch = std::chrono;
 
 namespace my_filters
 {
-    void GeneralFiler(const cv::Mat &input, cv::Mat &output, cv::Mat mask)
-    {
-        std::cout << "applying the following filter:" << std::endl;
-        std::cout << mask << std::endl;
-        const auto width = input.cols;
-        const auto height = input.rows;
-
-        const int window_size = mask.cols;
-        const int hw = window_size / 2;
-
-        for (int i = 0; i < height; i++)
-        {
-            for (int j = 0; j < width; j++)
-            {
-                output.at<uchar>(i, j) = 0;
-            }
-        }
-
-        // normalize mask
-        int sum_mask = 0;
-        for (int i = 0; i < window_size; i++)
-        {
-            for (int j = 0; j < window_size; j++)
-            {
-                sum_mask += static_cast<int>(mask.at<uchar>(i, j));
-            }
-        }
-
-        for (int r = window_size / 2; r < height - window_size / 2; ++r)
-        {
-            for (int c = window_size / 2; c < width - window_size / 2; ++c)
-            {
-
-                // box filter
-                int sum = 0;
-                for (int i = -window_size / 2; i <= window_size / 2; ++i)
-                {
-                    for (int j = -window_size / 2; j <= window_size / 2; ++j)
-                    {
-                        int intensity = static_cast<int>(input.at<uchar>(r + i, c + j));
-                        int weight = static_cast<int>(mask.at<uchar>(i + window_size / 2, j + window_size / 2));
-                        sum += intensity * weight;
-                    }
-                }
-                output.at<uchar>(r, c) = sum / sum_mask;
-            }
-        }
-    }
     void CreateGaussianMask(int window_size, cv::Mat &mask, double sigma)
     {
 
@@ -85,21 +32,6 @@ namespace my_filters
                 mask.at<uchar>(i, j) = 255 * std::exp(-r2 / (2 * sigmaSq));
             }
         }
-    }
-
-    void OurGaussianFiler(const cv::Mat &input, cv::Mat &output, int window_size = 5, double sigmaFactor = 1.0)
-    {
-        // e^-r^2(x, y)/2(sigma^2)
-        const auto width = input.cols;
-        const auto height = input.rows;
-
-        const int hw = window_size / 2;
-        const double sigma = hw / 2.5 * sigmaFactor;
-
-        cv::Mat mask;
-        CreateGaussianMask(window_size, mask, sigma);
-        // normalize mask
-        GeneralFiler(input, output, mask);
     }
 
     void BilterelarFiler(const cv::Mat &input, cv::Mat &output, int window_size = 5, double sigmaSpatialFactor = 1.0, double sigmaRange = 20.0)

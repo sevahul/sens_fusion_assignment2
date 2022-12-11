@@ -43,16 +43,9 @@ void callButton(int event, int x, int y, int flags, void* userdata)
         if (button.contains(cv::Point(x, y)))
         {
             std::cout << "Clicked!" << std::endl;
-            // rectangle(canvas(button), button, 255, 2);
 			changed = true;
         }
     }
-    if (event == cv::EVENT_LBUTTONUP)
-    {
-        // rectangle(canvas, button, 200, 2);
-    }
-
-    // imshow(nameJB, canvas);
     cv::waitKey(1);
 }
 
@@ -128,7 +121,6 @@ int main(int argc, char **argv)
 	po::store(po::command_line_parser(argc, argv).options(cmd_opts).positional(p).run(), vm);
 	po::notify(vm);
 
-	// po::store(po::command_line_parser(0, 0).options(config_only_options).run(), vm);
 	notify(vm);
 	if (vm.count("no-gui")){
 		interact = false;
@@ -172,19 +164,6 @@ int main(int argc, char **argv)
 	cv::imwrite((output_dir / "disp.png").string(), D_gt);
 	cv::imwrite((output_dir / "disp_DP.png").string(), D_dp);
 
-	// cv::Mat I_noisy;
-	// I.copyTo(I_noisy);
-	// cv::Mat noise(I_noisy.size(), I_noisy.type());
-	// uchar mean = 0;
-	// uchar stddev = 25;
-	// cv::randn(noise, mean, stddev);
-	// I_noisy += noise;
-
-	// I_noisy.convertTo(I_noisy, CV_16SC1);
-	// std::vector<std::string> filterNames;
-	// std::vector<double> SSIMs;
-	// std::vector<double> PSRNs;
-
 	if (D_gt.data == nullptr)
 	{
 		std::cerr << "Failed to load image" << std::endl;
@@ -195,15 +174,7 @@ int main(int argc, char **argv)
 
 	if (show_images)
 		cv::imshow("I", I);
-	// cv::waitKey();
-	// std::cout << "SSIM " << my_metrics::ssim(I_noisy, im, 5) << std::endl;
-	// SSIMs.push_back(my_metrics::ssim(im, im, 5));
-	// PSRNs.push_back(my_metrics::psnr(im, im, 5));
-	// filterNames.push_back("Orig");
-	// SSIMs.push_back(my_metrics::ssim(I_noisy, im, 5));
-	// PSRNs.push_back(my_metrics::psnr(gt_copy, im, 5));
-	// filterNames.push_back("Nois");
-	// gaussian
+
 	cv::Mat output_I(I.size(), CV_8U);
 	cv::Mat output_D_bilet(I.size(), CV_8U);
 	cv::Mat output_D_JB(I.size(), CV_8U);
@@ -250,26 +221,10 @@ int main(int argc, char **argv)
 		if (show_images)
 			cv::imshow("Iterative Updsampling D", output_D_Iter);
 	}
-	// cv::waitKey();
 
-	// std::cout << "Filts: ";
-	// for (std::string i: filterNames)
-	// 		std::cout << i << '\t';
-	// std::cout << std::endl;
-
-	// std::cout << "SSIMs: ";
-	// for (double i: SSIMs)
-	// 		std::cout << ceil(i * 100.0) / 100.0 << '\t';
-	// std::cout << std::endl;
-	// std::cout << "PSNRs: ";
-	// for (double i: PSRNs)
-	// 		std::cout << ceil(i * 100.0) / 100.0 << '\t';
-	// std::cout << std::endl;
 
 	if (show_images)
 		cv::waitKey();
-	
-
 	
 	if (interact)
 	{
