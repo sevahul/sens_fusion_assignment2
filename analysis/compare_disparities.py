@@ -10,20 +10,33 @@ from skimage.metrics import mean_squared_error
 import os
 
 def NCC(img1, img2): 
-    img1_float = img_as_float(img1)
-    img2_float = img_as_float(img2)
+    # ignore occlusions
+    valid1 = np.where(img1 > 0.01)
+    valid2 = np.where(img2 > 0.01)
+
+    img1_float = img_as_float(img1)[valid1 and valid2]
+    img2_float = img_as_float(img2)[valid1 and valid2]
+    
     img1_float = (img1_float - img1_float.mean())/np.linalg.norm(img1_float)
     img2_float = (img2_float - img2_float.mean())/np.linalg.norm(img2_float)
     cor = np.corrcoef(img1_float, img2_float)
     return cor[1,0]
 
-def MSE(img1, img2, normed = True, scale_factor=1000):
-    img1_float = img_as_float(img1)
-    img2_float = img_as_float(img2)
+def MSE(img1, img2, normed = True, scale_factor=2000, inverted=True):
+    valid1 = np.where(img1 > 0.01)
+    valid2 = np.where(img2 > 0.01)
+
+    img1_float = img_as_float(img1)[valid1 and valid2]
+    img2_float = img_as_float(img2)[valid1 and valid2]
+
+    # img1_float = img_as_float(img1)
+    # img2_float = img_as_float(img2)
     if normed:
         img1_float = (img1_float - img1_float.mean())/np.linalg.norm(img1_float)
         img2_float = (img2_float - img2_float.mean())/np.linalg.norm(img2_float)
     mse_score = mean_squared_error(img1_float*scale_factor, img2_float*scale_factor)
+    if inverted:
+        mse_score = 1/mse_score
     return mse_score
  
 def SSIM(img1, img2, normed = True):
