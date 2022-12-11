@@ -19,3 +19,4 @@
 
 ## Report
 Report is in `analaysis.pdf` file
+The repo runs out of the box using cached data for report (analysis.ipynb)
