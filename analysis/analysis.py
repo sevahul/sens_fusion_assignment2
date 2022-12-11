@@ -122,8 +122,8 @@ def run_algo(Dataset, Algo, w_size=10, gsf=1.5, sr=10):
 def compare_to_gt(Dataset, Algo, w_size=10, gsf=1.5, sr=10):
     all_metrics = read_metrics()
     filename, _ = get_full_name(Dataset, Algo=Algo, w_size=w_size, gsf=gsf, sr=sr)
-    # if filename in all_metrics.keys():
-    #     return all_metrics[filename]
+    if filename in all_metrics.keys():
+        return all_metrics[filename]
 
     run_algo(Dataset, Algo, w_size=w_size, gsf=gsf, sr=sr)
     img_gt = get_img_gt(Dataset)
@@ -194,20 +194,19 @@ def get_avg_metrics(get_metrics_func):
 
 # visualize image diff for a given dataset
 # TODO: change
-def display_image_diff(Dataset):
+def display_image_diff(Dataset, methods):
     f, ax = plt.subplots(1, len(methods))
     f.set_figheight(10)
     f.set_figwidth(30)
     for i, Algo in enumerate(methods):
-        l = 9
 
-        w = 1 if Algo == "DP" else 9
         img_gt = get_img_gt(Dataset)
         gt_normed = cv2.normalize(img_gt, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
 
 
         output_folder = os.path.join("output", Algo, Dataset)
-        file_full_name = run_algo(Dataset, Algo, w, l)
+        default_parameters_values = list(default_params.values())
+        file_full_name = run_algo(Dataset, Algo, *default_parameters_values)
         if not os.path.exists(output_folder):
             os.makedirs(output_folder)
         
