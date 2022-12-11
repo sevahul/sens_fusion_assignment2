@@ -17,8 +17,6 @@ namespace ch = std::chrono;
 
 
 // TODO
-// - param to hide pictures
-// - param to hide gui
 // - param for meaningful names
 
 const std::string version = "1.0";
@@ -76,6 +74,18 @@ void funcSigmaRange(int newValue, void *object)
 	changedSlider = true;
 };
 
+std::string produceName(std::string name, bool meaningful, int w_size, double gaussSigmaFactor, int sigmaRange)
+{
+	std::string result = name;
+	if (meaningful){
+		std::ostringstream ss;
+		ss << std::fixed << std::setprecision(2) << name << "_w" << w_size << "_gsf" 
+							<< int(gaussSigmaFactor*10) << "_sr" << sigmaRange;
+		result = ss.str();
+	}
+	return result + ".png";
+};
+
 int main(int argc, char **argv)
 {
 	fs::path default_config_path("params.cfg");
@@ -84,6 +94,7 @@ int main(int argc, char **argv)
 	bool show_images = true;
 	bool gen_pointclouds = false;
 	bool interact = true;
+	bool meaningfulNaming = false;
 
 	std::string config_path;
 	int nProcessors;
@@ -97,6 +108,8 @@ int main(int argc, char **argv)
 	("help,h", "Produce help message")("version,V", "Get program version")
 	("hide-disp,H", "Hide disparity images (does not affect gui)")
 	("no-gui,n", "Hide gui")
+	("meaningful-naming,N", "Meaningful naming")
+	("gen-pcl,p", "Generate pointcloud")
 	("jobs,j", po::value<int>(&nProcessors)->default_value(omp_get_max_threads()), "Number of Threads (max by default)")
 	("dataset,d", po::value<std::string>(&datasetName)->default_value(defaultDatasetName), "Dataset Name")
 	("config,c", po::value<std::string>(&config_path)->default_value(default_config_path.string()), "Path to the congiguration file")
@@ -123,6 +136,12 @@ int main(int argc, char **argv)
 
 	if (vm.count("hide-disp")){
 		show_images = false;
+	}
+	if (vm.count("meaningful-naming")){
+		meaningfulNaming = true;
+	}
+	if (vm.count("gen-pcl")){
+		gen_pointclouds = true;
 	}
 
 	if (vm.count("help"))
@@ -190,10 +209,12 @@ int main(int argc, char **argv)
 	cv::Mat output_D_JB(I.size(), CV_8U);
 	cv::Mat output_D_JBU(I.size(), CV_8U);
 	cv::Mat output_D_Iter(I.size(), CV_8U);
+	std::string filename;
 
 	if ((method == "all") || (method == "Bilet")){
 		my_filters::BilterelarFiler(D_dp, output_D_bilet, w_size, gaussSigmaFactor, sigmaRange);
-		cv::imwrite((output_dir / "disp_Bilet.png").string(), output_D_bilet);
+		filename = produceName((output_dir / "disp_Bilet").string(), meaningfulNaming, w_size, gaussSigmaFactor, sigmaRange);
+		cv::imwrite(filename, output_D_bilet);
 		if (gen_pointclouds)
 			my_filters::Disparity2PointCloud((output_dir / "pcl_Bilet").string(), output_D_bilet, dmin);
 		if (show_images)
@@ -202,7 +223,8 @@ int main(int argc, char **argv)
 
 	if ((method == "all") || (method == "JB")){
 		my_filters::JointBilterelarFiler(D_dp, I, output_D_JB, w_size, gaussSigmaFactor, sigmaRange);
-		cv::imwrite((output_dir / "disp_JB.png").string(), output_D_JB);
+		filename = produceName((output_dir / "disp_JB").string(), meaningfulNaming, w_size, gaussSigmaFactor, sigmaRange);
+		cv::imwrite(filename, output_D_JB);
 		if (gen_pointclouds)
 			my_filters::Disparity2PointCloud((output_dir / "pcl_JB").string(), output_D_JB, dmin);
 		if (show_images)
@@ -211,7 +233,8 @@ int main(int argc, char **argv)
 
 	if ((method == "all") || (method == "JBU")){
 		my_filters::JointBileteralUpsamplingFilter(D_ds, I, output_D_JBU, w_size, gaussSigmaFactor, sigmaRange);
-		cv::imwrite((output_dir / "disp_JBU.png").string(), output_D_JBU);
+		filename = produceName((output_dir / "disp_JBU").string(), meaningfulNaming, w_size, gaussSigmaFactor, sigmaRange);
+		cv::imwrite(filename, output_D_JBU);
 		if (gen_pointclouds)
 			my_filters::Disparity2PointCloud((output_dir / "pcl_JBU").string(), output_D_JBU, dmin);
 		if (show_images)
@@ -220,7 +243,8 @@ int main(int argc, char **argv)
 
 	if ((method == "all") || (method == "Iter")){
 		my_filters::IterativeUpsamplingFilter(D_ds, I, output_D_Iter, w_size, gaussSigmaFactor, sigmaRange);
-		cv::imwrite((output_dir / "disp_iter.png").string(), output_D_Iter);
+		filename = produceName((output_dir / "disp_Iter").string(), meaningfulNaming, w_size, gaussSigmaFactor, sigmaRange);
+		cv::imwrite(filename, output_D_Iter);
 		if (gen_pointclouds)
 			my_filters::Disparity2PointCloud((output_dir / "pcl_iter").string(), output_D_Iter, dmin);
 		if (show_images)
