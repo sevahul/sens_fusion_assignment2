@@ -18,5 +18,9 @@
 **Note:** to produce pointclouds, use `-p` flag while running the program
 
 ## Report
-Report is in `analaysis.pdf` file
-The repo runs out of the box using cached data for report (analysis.ipynb)
+Report with results analysis and execution results is in `analaysis.pdf` file.
+The repo runs out of the box using cached data for generating plots (analysis.ipynb)
+
+## GUI example
+If you run the program with GUI, it would look like that, allowing to see how different parameters influence the Filtered/Upsampled Image: <br>
+<img src="https://github.com/sevagul/sens_fusion_assignment2/blob/main/output/gui.png">
