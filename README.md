@@ -1,4 +1,4 @@
-# Assignment 2 Sensor fusion: filtering disparity images
+# Assignment 2 Sensor fusion: Filtering and Upsampling disparity images
 ## Download data:
 `cd data` <br/>
 `chmod +x load_all_data.sh` <br/>
